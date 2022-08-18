@@ -23,7 +23,6 @@ from qiskit import QuantumCircuit, QuantumRegister
 from qclib.state_preparation.initialize import Initialize
 from qclib.gates.uc_gate import UCGate
 
-
 class UCGInitialize(Initialize):
     """
         Quantum circuits with uniformly controlled one-qubit gates
@@ -57,7 +56,6 @@ class UCGInitialize(Initialize):
 
         tree_level = self.num_qubits
         while tree_level > 0:
-
             current_level_mux = self._build_multiplexor(parent, children)
             ucg = UCGate(current_level_mux, up_to_diagonal=True)
 
@@ -90,9 +88,12 @@ class UCGInitialize(Initialize):
         len_pnodes = len(parent_amplitudes)
         len_snodes = len(children_amplitudes)
         for parent_idx, sibling_idx in zip(range(len_pnodes), range(0, len_snodes, 2)):
-            amp_ket0 = (children_amplitudes[sibling_idx] / parent_amplitudes[parent_idx])
-            amp_ket1 = (children_amplitudes[sibling_idx + 1] / parent_amplitudes[parent_idx])
-            gates += [self._get_branch_operator(amp_ket0, amp_ket1)]
+            if parent_amplitudes[parent_idx] != 0:
+                amp_ket0 = (children_amplitudes[sibling_idx] / parent_amplitudes[parent_idx])
+                amp_ket1 = (children_amplitudes[sibling_idx + 1] / parent_amplitudes[parent_idx])
+                gates += [self._get_branch_operator(amp_ket0, amp_ket1)]
+            else: 
+                gates += [np.eye(2)]
         return gates
 
     @staticmethod

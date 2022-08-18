@@ -17,6 +17,7 @@
 """
 from unittest import TestCase
 import numpy as np
+import numpy.linalg as la
 from qiskit import QuantumCircuit
 
 from qclib.state_preparation import UCGInitialize
@@ -29,7 +30,7 @@ class TestUCGInitialize(TestCase):
 
   def test_three_qubit_state_real(self):
     state = np.random.rand(8)
-    state = state / np.linalg.norm(state)
+    state = state / la.norm(state)
     
     initialize = UCGInitialize.initialize
     circuit = QuantumCircuit(3)
@@ -43,8 +44,21 @@ class TestUCGInitialize(TestCase):
   def test_three_qubit_state_complex(self):
 
     state = np.random.rand(8) + np.random.rand(8) * 1j
-    state = state / np.linalg.norm(state)
+    state = state / la.norm(state)
     
+    initialize = UCGInitialize.initialize
+    circuit = QuantumCircuit(3)
+    
+    initialize(circuit, state.tolist())
+
+    output_state = get_state(circuit)
+ 
+    self.assertTrue(np.allclose(output_state, state))
+
+  def test_three_qubit_sparse_state(self): 
+    state = np.array([1, 0, 0, 0, 0, 0, 0, 1])
+    state = state / la.norm(state)
+
     initialize = UCGInitialize.initialize
     circuit = QuantumCircuit(3)
     
