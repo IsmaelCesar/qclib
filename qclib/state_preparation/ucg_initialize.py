@@ -22,7 +22,9 @@ import numpy.linalg as la
 from qiskit import QuantumCircuit, QuantumRegister
 from qclib.state_preparation.initialize import Initialize
 from qclib.gates.uc_gate import UCGate
-
+from qclib.entanglement import ( schmidt_decomposition, 
+                                 meyer_wallach_entanglement, 
+                                 geometric_entanglement)
 class UCGInitialize(Initialize):
     """
         Quantum circuits with uniformly controlled one-qubit gates
@@ -34,6 +36,8 @@ class UCGInitialize(Initialize):
         self._name = "ucg_initialize"
         self._get_num_qubits(params)
         self.target_state = 0 if opt_params is None else opt_params.get("target_state")
+
+        self._EPS = 1e-10 #if opt_params is None else opt_params.get("epsilon")
 
         if label is None:
             self._label = "ucg_initialize"
@@ -58,6 +62,9 @@ class UCGInitialize(Initialize):
         tree_level = self.num_qubits
         while tree_level > 0:
             bit_target = string_target[self.num_qubits-tree_level]
+
+            mux_step = self._infer_mux_step(parent, children, tree_level)
+
             current_level_mux = self._build_multiplexor(parent,
                                                         children,
                                                         target=bit_target)
@@ -80,6 +87,41 @@ class UCGInitialize(Initialize):
             parent = [la.norm([children[2 * k], children[2 * k + 1]]) for k in range(size)]
 
         return q_circuit.inverse()
+
+    def _infer_mux_step(self, parent: np.ndarray, children: np.ndarray, tree_level: int):
+
+        partitions_parent = list(range(0, (tree_level - 1)// 2))
+        partitions_children = list(range(0, tree_level // 2))
+
+        _, s_parent, _ = schmidt_decomposition(parent, partitions_parent)
+        _, s_children, _ = schmidt_decomposition(children, partitions_children)
+
+        # Truncate singular values close to zero
+        s_parent[s_parent < self._EPS] = 0
+        s_children[s_children < self._EPS] = 0
+
+        mux_step = 1
+        nonzero_idx_c = np.nonzero(s_children)[0]
+        nonzero_idx_p = np.nonzero(s_parent)[0]
+        if len(nonzero_idx_c) < 2**(tree_level // 2):
+            s_children = s_children[nonzero_idx_c]
+            s_parent = s_parent[nonzero_idx_p]
+
+            entropy_children = (-s_children*np.log(s_children)).sum()
+            entropy_parent = (-s_parent*np.log(s_parent)).sum()
+            
+            if (np.isclose(entropy_children, 0) and entropy_parent > 0):
+                mux_step = 2**(tree_level // 2)
+            elif (entropy_children > 0 and np.isclose(entropy_parent, 0)):
+                mux_step = 2**(tree_level // 2)
+            elif entropy_children > entropy_parent:
+                mux_step = 2**((tree_level-1) // 4) - 1
+            elif np.isclose(entropy_children, 0) and np.isclose(entropy_parent, 0):
+                # same op
+                mux_step = 0
+
+
+        return mux_step
 
     def _build_multiplexor(self, parent_amplitudes, children_amplitudes, target='0'):
         """

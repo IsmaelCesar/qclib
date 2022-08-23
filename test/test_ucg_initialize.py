@@ -61,3 +61,24 @@ class TestUCGInitialize(TestCase):
         output_state = get_state(circuit)
         print(output_state @ state.T)
         self.assertTrue(np.allclose(output_state, state))
+
+    def test_product_state(self):
+        """Test UCGInitialize with three qubits and index 0"""
+
+        # bulding state
+        np.random.seed(1)
+        n_qubits = 5
+        b = np.random.rand(2**1)
+        a = np.random.rand(2**4)
+        state = np.kron(a, b)
+        #state = np.random.rand(2**n_qubits)
+        state = state / np.linalg.norm(state)
+
+        initialize = UCGInitialize.initialize
+        circuit = QuantumCircuit(n_qubits)
+
+        initialize(circuit, state.tolist(), opt_params={"target_state": 0})
+
+        output_state = get_state(circuit)
+        print(output_state @ state.T)
+        self.assertTrue(np.allclose(output_state, state))
