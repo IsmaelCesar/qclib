@@ -22,9 +22,8 @@ import numpy.linalg as la
 from qiskit import QuantumCircuit, QuantumRegister
 from qclib.state_preparation.initialize import Initialize
 from qclib.gates.uc_gate import UCGate
-from qclib.entanglement import ( schmidt_decomposition, 
-                                 meyer_wallach_entanglement, 
-                                 geometric_entanglement)
+from qclib.entanglement import schmidt_decomposition
+
 class UCGInitialize(Initialize):
     """
         Quantum circuits with uniformly controlled one-qubit gates
@@ -68,6 +67,9 @@ class UCGInitialize(Initialize):
             current_level_mux = self._build_multiplexor(parent,
                                                         children,
                                                         target=bit_target)
+
+            mux = np.array(current_level_mux)
+
             ucg = UCGate(current_level_mux, up_to_diagonal=True)
 
             controls = q_register[self.num_qubits - tree_level + 1:]
@@ -90,8 +92,8 @@ class UCGInitialize(Initialize):
 
     def _infer_mux_step(self, parent: np.ndarray, children: np.ndarray, tree_level: int):
 
-        partitions_parent = list(range(0, (tree_level - 1)// 2))
-        partitions_children = list(range(0, tree_level // 2))
+        partitions_parent = list(range((tree_level - 1)// 2, tree_level-1))
+        partitions_children = list(range(tree_level // 2, tree_level))
 
         _, s_parent, _ = schmidt_decomposition(parent, partitions_parent)
         _, s_children, _ = schmidt_decomposition(children, partitions_children)
@@ -100,26 +102,35 @@ class UCGInitialize(Initialize):
         s_parent[s_parent < self._EPS] = 0
         s_children[s_children < self._EPS] = 0
 
-        mux_step = 1
+        mux_step = 2**(tree_level-1)
         nonzero_idx_c = np.nonzero(s_children)[0]
         nonzero_idx_p = np.nonzero(s_parent)[0]
+
         if len(nonzero_idx_c) < 2**(tree_level // 2):
             s_children = s_children[nonzero_idx_c]
             s_parent = s_parent[nonzero_idx_p]
 
+            index = int(np.floor((-np.abs(s_children)**2*np.log2(np.abs(s_children)**2)).sum()))
+
             entropy_children = (-s_children*np.log(s_children)).sum()
             entropy_parent = (-s_parent*np.log(s_parent)).sum()
-            
-            if (np.isclose(entropy_children, 0) and entropy_parent > 0):
-                mux_step = 2**(tree_level // 2)
-            elif (entropy_children > 0 and np.isclose(entropy_parent, 0)):
-                mux_step = 2**(tree_level // 2)
-            elif entropy_children > entropy_parent:
-                mux_step = 2**((tree_level-1) // 4) - 1
-            elif np.isclose(entropy_children, 0) and np.isclose(entropy_parent, 0):
-                # same op
-                mux_step = 0
 
+            if np.isclose(entropy_children, 0) or np.isclose(entropy_parent, 0): 
+                mux_step = 2**(tree_level // 2)
+            elif np.isclose(entropy_parent, entropy_children):
+                ebit_children = int(np.log2(len(nonzero_idx_c)))
+                ebit_parent = int(np.log2(len(nonzero_idx_p)))
+
+                mux_step = 2**(ebit_parent + ebit_children) % tree_level
+
+            elif entropy_parent > entropy_children:
+                mux_step = 2**(tree_level // (4 + index))
+            elif entropy_parent < entropy_children:
+                mux_step = 2**(tree_level // (2 + index))
+
+
+        elif len(nonzero_idx_c) == len(nonzero_idx_p):
+            mux_step = 1
 
         return mux_step
 

@@ -67,8 +67,8 @@ class TestUCGInitialize(TestCase):
 
         # bulding state
         np.random.seed(1)
-        n_qubits = 5
-        b = np.random.rand(2**1)
+        n_qubits = 7
+        b = np.random.rand(2**3)
         a = np.random.rand(2**4)
         state = np.kron(a, b)
         #state = np.random.rand(2**n_qubits)
